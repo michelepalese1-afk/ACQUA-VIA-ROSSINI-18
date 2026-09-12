@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ripartizione Bolletta Acqua</title>
+  <!-- Tailwind CSS per la grafica responsive -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librerie per esportazione PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 p-4 font-sans text-gray-800">
+  <div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow-md space-y-6">
+    <h1 class="text-2xl font-bold text-blue-600 text-center">Ripartizione Bolletta Acqua</h1>
+    
+    <!-- Input Bolletta -->
+    <div class="border-b pb-4 space-y-3">
+      <h2 class="text-lg font-semibold text-gray-700">1. Dati Bolletta Generale</h2>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500">Importo Bolletta (€)</label>
+          <input type="number" id="importoBolletta" step="0.01" class="w-full border rounded p-2 mt-1" placeholder="es. 150.50">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500">Periodo / Mese</label>
+          <input type="text" id="periodo" class="w-full border rounded p-2 mt-1" placeholder="es. Q1 2026">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500">Lettura Contatore Generale (m³)</label>
+        <input type="number" id="genLettura" class="w-full border rounded p-2 mt-1" placeholder="es. 1250">
+      </div>
+    </div>
+
+    <!-- Input Letture Famiglie -->
+    <div class="border-b pb-4 space-y-3">
+      <h2 class="text-lg font-semibold text-gray-700">2. Letture Sotto-contatori (m³)</h2>
+      <div class="space-y-3">
+        <!-- Famiglia 1 -->
+        <div class="space-y-1">
+          <input type="text" id="nomeF1" value="Famiglia 1" class="w-full border-b font-medium text-sm text-blue-800 bg-transparent focus:outline-none focus:border-blue-500" placeholder="Nome Unità / Famiglia 1">
+          <div class="flex items-center space-x-2">
+            <input type="number" id="f1Prec" placeholder="Lettura Precedente" class="w-1/2 border rounded p-2 text-sm">
+            <input type="number" id="f1Att" placeholder="Lettura Attuale" class="w-1/2 border rounded p-2 text-sm">
+          </div>
+        </div>
+
+        <!-- Famiglia 2 -->
+        <div class="space-y-1">
+          <input type="text" id="nomeF2" value="Famiglia 2" class="w-full border-b font-medium text-sm text-blue-800 bg-transparent focus:outline-none focus:border-blue-500" placeholder="Nome Unità / Famiglia 2">
+          <div class="flex items-center space-x-2">
+            <input type="number" id="f2Prec" placeholder="Lettura Precedente" class="w-1/2 border rounded p-2 text-sm">
+            <input type="number" id="f2Att" placeholder="Lettura Attuale" class="w-1/2 border rounded p-2 text-sm">
+          </div>
+        </div>
+
+        <!-- Famiglia 3 -->
+        <div class="space-y-1">
+          <input type="text" id="nomeF3" value="Famiglia 3" class="w-full border-b font-medium text-sm text-blue-800 bg-transparent focus:outline-none focus:border-blue-500" placeholder="Nome Unità / Famiglia 3">
+          <div class="flex items-center space-x-2">
+            <input type="number" id="f3Prec" placeholder="Lettura Precedente" class="w-1/2 border rounded p-2 text-sm">
+            <input type="number" id="f3Att" placeholder="Lettura Attuale" class="w-1/2 border rounded p-2 text-sm">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button onclick="calcolaERagruppa()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow">
+      Calcola e Salva Ripartizione
+    </button>
+
+    <!-- Risultato del Calcolo -->
+    <div id="areaRisultato" class="hidden bg-gray-50 p-4 rounded-lg border space-y-3">
+      <div id="contenutoPDF" class="bg-white p-4 rounded border">
+        <h3 class="font-bold text-gray-700 border-b pb-1">Risultato Calcolo <span id="resPeriodo"></span></h3>
+        <p class="text-xs text-gray-500 mt-1" id="resDifferenza"></p>
+        <ul class="space-y-2 text-sm mt-3" id="listaQuote"></ul>
+      </div>
+
+      <!-- Pulsanti Azione -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+        <button onclick="scaricaPDF()" class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded transition flex items-center justify-center gap-1">
+          📄 Scarica Report PDF
+        </button>
+        <button onclick="condividiWhatsApp()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold py-2 rounded transition flex items-center justify-center gap-1">
+          💬 Condividi su WhatsApp
+        </button>
+      </div>
+    </div>
+
+    <!-- Storico Calcoli -->
+    <div class="border-t pt-4">
+      <h2 class="text-lg font-semibold text-gray-700 mb-2">Storico Ripartizioni</h2>
+      <div id="listaStorico" class="space-y-2 text-sm max-h-48 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <script>
+    let ultimoCalcolo = null;
+
+    function calcolaERagruppa() {
+      const importo = parseFloat(document.getElementById('importoBolletta').value);
+      const periodo = document.getElementById('periodo').value || 'N.D.';
+      
+      const nomeF1 = document.getElementById('nomeF1').value.trim() || 'Famiglia 1';
+      const nomeF2 = document.getElementById('nomeF2').value.trim() || 'Famiglia 2';
+      const nomeF3 = document.getElementById('nomeF3').value.trim() || 'Famiglia 3';
+
+      const f1 = (parseFloat(document.getElementById('f1Att').value) || 0) - (parseFloat(document.getElementById('f1Prec').value) || 0);
+      const f2 = (parseFloat(document.getElementById('f2Att').value) || 0) - (parseFloat(document.getElementById('f2Prec').value) || 0);
+      const f3 = (parseFloat(document.getElementById('f3Att').value) || 0) - (parseFloat(document.getElementById('f3Prec').value) || 0);
+
+      const totaleSotto = f1 + f2 + f3;
+
+      if (!importo || totaleSotto <= 0) {
+        alert("Inserisci un importo valido e assicurati che la somma dei consumi sia maggiore di zero.");
+        return;
+      }
+
+      // Calcolo quote pro-quota sui consumi reali
+      const q1 = (f1 / totaleSotto) * importo;
+      const q2 = (f2 / totaleSotto) * importo;
+      const q3 = (f3 / totaleSotto) * importo;
+
+      // Salvataggio stato corrente
+      ultimoCalcolo = { periodo, importo, nomeF1, nomeF2, nomeF3, f1, f2, f3, q1, q2, q3, totaleSotto };
+
+      // Rendering Risultati
+      document.getElementById('resPeriodo').innerText = `(${periodo})`;
+      document.getElementById('resDifferenza').innerText = `Consumo totale rilevato sotto-contatori: ${totaleSotto} m³`;
+      
+      const lista = document.getElementById('listaQuote');
+      lista.innerHTML = `
+        <li class="flex justify-between border-b pb-1"><span>${nomeF1} (${f1} m³):</span> <strong>€ ${q1.toFixed(2)}</strong></li>
+        <li class="flex justify-between border-b pb-1"><span>${nomeF2} (${f2} m³):</span> <strong>€ ${q2.toFixed(2)}</strong></li>
+        <li class="flex justify-between border-b pb-1"><span>${nomeF3} (${f3} m³):</span> <strong>€ ${q3.toFixed(2)}</strong></li>
+        <li class="flex justify-between font-bold pt-1 text-base text-gray-800"><span>Totale Bolletta:</span> <span>€ ${importo.toFixed(2)}</span></li>
+      `;
+
+      document.getElementById('areaRisultato').classList.remove('hidden');
+
+      // Salvataggio nello storico locale
+      const record = { 
+        data: new Date().toLocaleDateString(), 
+        periodo, importo, 
+        nomeF1, q1, 
+        nomeF2, q2, 
+        nomeF3, q3 
+      };
+      salvaInStorico(record);
+      caricaStorico();
+    }
+
+    function condividiWhatsApp() {
+      if (!ultimoCalcolo) return;
+
+      const c = ultimoCalcolo;
+      const testo = `💧 *Ripartizione Bolletta Acqua* (${c.periodo})\n\n` +
+        `💰 *Totale Bolletta:* € ${c.importo.toFixed(2)}\n` +
+        `📊 *Consumo Totale:* ${c.totaleSotto} m³\n\n` +
+        `*Dettaglio Quote:*\n` +
+        `• *${c.nomeF1}:* € ${c.q1.toFixed(2)} (${c.f1} m³)\n` +
+        `• *${c.nomeF2}:* € ${c.q2.toFixed(2)} (${c.f2} m³)\n` +
+        `• *${c.nomeF3}:* € ${c.q3.toFixed(2)} (${c.f3} m³)\n\n` +
+        `_Messaggio generato automaticamente._`;
+
+      const urlWhatsApp = `https://api.whatsapp.com/send?text=${encodeURIComponent(testo)}`;
+      window.open(urlWhatsApp, '_blank');
+    }
+
+    function salvaInStorico(record) {
+      let storico = JSON.parse(localStorage.getItem('storicoAcqua') || '[]');
+      storico.unshift(record);
+      localStorage.setItem('storicoAcqua', JSON.stringify(storico));
+    }
+
+    function caricaStorico() {
+      let storico = JSON.parse(localStorage.getItem('storicoAcqua') || '[]');
+      const container = document.getElementById('listaStorico');
+      if (storico.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400">Nessun calcolo in archivio.</p>';
+        return;
+      }
+      container.innerHTML = storico.map(item => `
+        <div class="p-2 bg-gray-50 border rounded text-xs flex justify-between items-center">
+          <div>
+            <strong>${item.periodo}</strong> (${item.data}) - Tot: €${item.importo.toFixed(2)}
+            <br>${item.nomeF1}: €${item.q1.toFixed(2)} | ${item.nomeF2}: €${item.q2.toFixed(2)} | ${item.nomeF3}: €${item.q3.toFixed(2)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function scaricaPDF() {
+      const { jsPDF } = window.jspdf;
+      const elemento = document.getElementById('contenutoPDF');
+      
+      html2canvas(elemento).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const width = pdf.internal.pageSize.getWidth();
+        pdf.addImage(imgData, 'PNG', 10, 10, width - 20, 0);
+        pdf.save(`Ripartizione_Acqua_${document.getElementById('periodo').value || 'Report'}.pdf`);
+      });
+    }
+
+    // Caricamento iniziale dello storico
+    caricaStorico();
+  </script>
+</body>
+</html>
